@@ -1,0 +1,11 @@
+---
+services:
+  github-runner:
+    image: ${DOCKER_IMAGE:-actions-runner-docker}
+    container_name: github-runner
+    restart: always
+    environment:
+      GITHUB_URL: "${GITHUB_URL}"
+      GITHUB_TOKEN: "${GITHUB_TOKEN}"
+    volumes:
+      - ./runner:/home/runner
