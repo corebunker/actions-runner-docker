@@ -6,7 +6,7 @@ if [[ -z "$GITHUB_URL" || -z "$GITHUB_TOKEN" ]]; then
   exit 1
 fi
 
-cd /home/runner
+cd /opt/actions-runner
 
 if [ ! -f .runner ]; then
   echo "Configuring runner..."
@@ -17,6 +17,6 @@ if [ ! -f .runner ]; then
     --work _work
 fi
 
-trap "./config.sh remove --unattended" EXIT
+trap "./config.sh remove --unattended --token $GITHUB_TOKEN" EXIT
 
 ./run.sh

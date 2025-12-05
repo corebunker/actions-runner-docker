@@ -3,9 +3,10 @@ services:
   github-runner:
     image: ${DOCKER_IMAGE:-actions-runner-docker}
     container_name: github-runner
-    restart: always
+    restart: unless-stopped
+    env_file: [".env"]
     environment:
       GITHUB_URL: "${GITHUB_URL}"
       GITHUB_TOKEN: "${GITHUB_TOKEN}"
     volumes:
-      - ./runner:/home/runner
+      - ./runner/_work:/opt/actions-runner/_work

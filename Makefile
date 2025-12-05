@@ -21,18 +21,18 @@ build:
 	docker build --build-arg RUNNER_VERSION=$(RUNNER_VERSION) -t $(IMAGE_NAME) .
 
 up:
-	docker compose up -d
+	docker-compose up -d
 
 down:
-	docker compose down
+	docker-compose down
 
 restart: down up
 
 logs:
-	docker compose logs -f
+	docker-compose logs -f
 
 logs-tail:
-	docker compose logs --tail=100
+	docker-compose logs --tail=100
 
 shell:
 	docker exec -it $(CONTAINER_NAME) bash
@@ -49,7 +49,7 @@ env:
 	fi
 
 clean:
-	docker compose down --rmi local -v 2>/dev/null || true
+	docker-compose down --rmi local -v 2>/dev/null || true
 	rm -rf ./runner/_work 2>/dev/null || true
 	@echo "Cleaned up successfully."
 

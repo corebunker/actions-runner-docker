@@ -13,17 +13,19 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd -m runner
+RUN useradd -m -d /opt/actions-runner runner
 
-WORKDIR /home/runner
+WORKDIR /opt/actions-runner
 
 RUN curl -L -o actions-runner.tar.gz \
     "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz" \
     && tar xzf actions-runner.tar.gz \
     && rm actions-runner.tar.gz \
-    && chown -R runner:runner /home/runner
+    && chown -R runner:runner /opt/actions-runner
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 USER runner
-COPY entrypoint.sh /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
