@@ -26,6 +26,7 @@ RUN curl -L -o actions-runner.tar.gz \
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-USER runner
+RUN mkdir -p /opt/actions-runner/_work \
+    && chown -R runner:runner /opt/actions-runner/_work
 
 ENTRYPOINT ["/entrypoint.sh"]

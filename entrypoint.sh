@@ -6,17 +6,26 @@ if [[ -z "$GITHUB_URL" || -z "$GITHUB_TOKEN" ]]; then
   exit 1
 fi
 
+if [ -d "/opt/actions-runner/_work" ]; then
+  chown -R runner:runner /opt/actions-runner/_work
+fi
+
+exec su runner -c '
 cd /opt/actions-runner
 
 if [ ! -f .runner ]; then
   echo "Configuring runner..."
   ./config.sh --unattended \
-    --url "$GITHUB_URL" \
-    --token "$GITHUB_TOKEN" \
+    --url "'"$GITHUB_URL"'" \
+    --token "'"$GITHUB_TOKEN"'" \
     --name "$(hostname)" \
     --work _work
 fi
 
-trap "./config.sh remove --unattended --token $GITHUB_TOKEN" EXIT
+cleanup() {
+  ./config.sh remove --unattended --token "'"$GITHUB_TOKEN"'"
+}
+trap cleanup EXIT
 
 ./run.sh
+'
