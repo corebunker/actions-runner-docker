@@ -10,3 +10,6 @@ services:
       GITHUB_TOKEN: "${GITHUB_TOKEN}"
     volumes:
       - ./runner/_work:/opt/actions-runner/_work
+      - /var/run/docker.sock:/var/run/docker.sock
+    group_add:
+      - ${DOCKER_GID:-999}

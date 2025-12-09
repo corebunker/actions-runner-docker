@@ -10,6 +10,14 @@ if [ -d "/opt/actions-runner/_work" ]; then
   chown -R runner:runner /opt/actions-runner/_work
 fi
 
+if [ -S /var/run/docker.sock ]; then
+  DOCKER_GID=$(stat -c '%g' /var/run/docker.sock)
+  if ! getent group docker > /dev/null 2>&1; then
+    groupadd -g "$DOCKER_GID" docker
+  fi
+  usermod -aG docker runner
+fi
+
 exec su runner -c '
 cd /opt/actions-runner
 
