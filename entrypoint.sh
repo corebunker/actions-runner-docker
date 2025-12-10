@@ -6,7 +6,13 @@ if [[ -z "$GITHUB_URL" || -z "$GITHUB_TOKEN" ]]; then
   exit 1
 fi
 
-if [ -d "/opt/actions-runner/_work" ]; then
+if [ -n "$Runner_Work_Dir" ]; then
+  echo "Using custom work directory: $Runner_Work_Dir"
+  if [ ! -d "$Runner_Work_Dir" ]; then
+    mkdir -p "$Runner_Work_Dir"
+  fi
+  chown -R runner:runner "$Runner_Work_Dir"
+elif [ -d "/opt/actions-runner/_work" ]; then
   chown -R runner:runner /opt/actions-runner/_work
 fi
 
@@ -27,7 +33,8 @@ if [ ! -f .runner ]; then
     --url "'"$GITHUB_URL"'" \
     --token "'"$GITHUB_TOKEN"'" \
     --name "$(hostname)" \
-    --work _work
+    --work "'"${Runner_Work_Dir:-_work}"'" \
+    --replace
 fi
 
 cleanup() {

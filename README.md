@@ -1,40 +1,21 @@
 # GitHub Actions Runner in Docker
 
-A self-hosted GitHub Actions runner that runs in Docker. Built using only the official GitHub runner binaries - no third-party images.
+Self-hosted GitHub Actions runner using official GitHub runner binaries. No third-party images.
 
-Works on any Linux host, including Alpine (uses Ubuntu inside the container for glibc compatibility).
+The runner is **ephemeral**: it registers on startup and automatically unregisters when the container stops.
 
-## What you need
-
-- Docker
-- Docker Compose v2
-- A GitHub runner token
-
-## Getting started
-
-### 1. Clone and setup
+## Quick Start
 
 ```bash
-git clone https://github.com/YOUR_USER/actions-runner-docker.git
+git clone https://github.com/codebunker/actions-runner-docker.git
 cd actions-runner-docker
 make env
 ```
 
-Edit the `.env` file with your values.
-
-### 2. Configure your runner
-
-For **organization runners** (available to all repos in the org):
+Edit `.env` with your GitHub URL and token:
 
 ```env
-GITHUB_URL=https://github.com/your-org
-GITHUB_TOKEN=YOUR_TOKEN_HERE
-```
-
-For **repository runners** (specific to one repo):
-
-```env
-GITHUB_URL=https://github.com/user/repo
+GITHUB_URL=https://github.com/your-org        # or https://github.com/user/repo
 GITHUB_TOKEN=YOUR_TOKEN_HERE
 ```
 
@@ -42,18 +23,71 @@ GITHUB_TOKEN=YOUR_TOKEN_HERE
 - Repository: Settings → Actions → Runners → New self-hosted runner
 - Organization: Settings → Actions → Runners → New runner
 
-### 3. Build and run
+Build and start:
 
 ```bash
 make build
 make up
+make logs  # Check if connected
 ```
 
-That's it. Check the logs with `make logs` to see if it connected.
+## Project Structure
 
-## Building for a registry
+```
+actions-runner-docker/
+├── Dockerfile           # Ubuntu + GitHub runner
+├── docker-compose.yaml  # Container config
+├── entrypoint.sh        # Startup script
+├── Makefile             # Helper commands
+└── _work/               # Job workspace (mounted volume)
+```
 
-If you want to push the image to GitHub Container Registry or Docker Hub, set the image name in your `.env`:
+## Docker-out-of-Docker
+
+This runner exposes the host Docker daemon via `/var/run/docker.sock`, allowing workflows to run containers.
+
+### The Empty Volume Problem
+
+When you run `docker run -v "${{ github.workspace }}:/app" ...` inside a job, the command goes to the **host Docker daemon**. The daemon resolves `-v` paths on the **host filesystem**, not inside the runner container.
+
+If the path doesn't exist on the host, Docker creates an empty directory → your files "disappear".
+
+### Solution: `--volumes-from`
+
+Use `--volumes-from "$(hostname)"` to inherit the runner's mounted volumes:
+
+```yaml
+- name: Run pipeline in container
+  run: |
+    docker run --rm \
+      --volumes-from "$(hostname)" \
+      -w "${{ github.workspace }}" \
+      your-image:tag \
+      bash -lc "your-command"
+```
+
+Now the nested container sees the same workspace as the runner, with all your files intact.
+
+## Available Commands
+
+```
+make build      - Build the runner image
+make up         - Start the runner
+make down       - Stop the runner
+make restart    - Restart the runner
+make logs       - Follow logs
+make logs-tail  - Show last 100 lines
+make shell      - Open bash in runner
+make status     - Show container status
+make env        - Create .env from template
+make clean      - Remove containers/volumes
+make rebuild    - clean + build + up
+make push       - Push to registry (set DOCKER_IMAGE in .env)
+```
+
+## Push to Registry (Optional)
+
+Set the image name in `.env`:
 
 ```env
 DOCKER_IMAGE=ghcr.io/your-org/actions-runner:v1.0.0
@@ -66,115 +100,28 @@ make build
 make push
 ```
 
-You can also override the runner version:
+Override runner version:
 
 ```bash
 RUNNER_VERSION=2.330.0 make build
 ```
 
-## Available commands
-
-```
-make build      - Build the image
-make up         - Start the runner
-make down       - Stop the runner
-make restart    - Restart the runner
-make logs       - Follow logs
-make logs-tail  - Show last 100 lines
-make shell      - Open shell in container
-make status     - Show container status
-make clean      - Remove everything
-make rebuild    - Clean + build + start
-make push       - Push to registry
-```
-
-## Project structure
-
-```
-actions-runner-docker/
-├── Dockerfile           - Ubuntu image with GitHub runner
-├── docker-compose.yaml  - Container config
-├── entrypoint.sh        - Startup script
-├── Makefile             - Commands
-├── .env_example         - Template
-└── runner/              - Runner data (created on first run)
-```
-
-## How it works
-
-When you start the container:
-1. It validates your `GITHUB_URL` and `GITHUB_TOKEN`
-2. Registers the runner with GitHub
-3. Starts listening for jobs
-4. When you stop it, it unregisters automatically
-
-## Advanced stuff
-
-### Custom runner name
-
-Edit `entrypoint.sh` and change the `--name` parameter:
-
-```bash
---name "my-runner" \
-```
-
-### Multiple runners
-
-Add more services to `docker-compose.yaml`:
-
-```yaml
-services:
-  runner-1:
-    image: actions-runner-docker
-    container_name: github-runner-1
-    environment:
-      GITHUB_URL: "${GITHUB_URL}"
-      GITHUB_TOKEN: "${GITHUB_TOKEN_1}"
-    volumes:
-      - ./runner-1:/home/runner
-
-  runner-2:
-    image: actions-runner-docker
-    container_name: github-runner-2
-    environment:
-      GITHUB_URL: "${GITHUB_URL}"
-      GITHUB_TOKEN: "${GITHUB_TOKEN_2}"
-    volumes:
-      - ./runner-2:/home/runner
-```
-
-### Docker-in-Docker
-
-If your workflows need Docker, mount the socket:
-
-```yaml
-volumes:
-  - ./runner:/home/runner
-  - /var/run/docker.sock:/var/run/docker.sock
-```
-
-## Common issues
+## Common Issues
 
 **Runner not showing up in GitHub:**
-- Check if the token is valid (they expire and are single-use)
-- Look at the logs: `make logs`
-- Try regenerating the token
+- Check if token is valid (they expire and are single-use)
+- View logs: `make logs`
+- Regenerate token
 
 **Permission errors:**
 ```bash
-sudo chown -R $USER:$USER ./runner
+sudo chown -R $USER:$USER ./_work
 ```
 
 **Container keeps restarting:**
-
-The runner might be registered elsewhere. Clean it up:
-
-```bash
-make down
-rm -rf ./runner/.runner
-make up
-```
+- Token likely expired or already used
+- Generate new token and update `.env`
 
 ## License
 
-MIT - do whatever you want with it.
+MIT
