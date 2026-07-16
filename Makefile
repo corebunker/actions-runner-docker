@@ -7,6 +7,7 @@ IMAGE_NAME ?= $(DOCKER_IMAGE)
 IMAGE_NAME ?= actions-runner-docker
 CONTAINER_NAME := github-runner
 RUNNER_VERSION ?= 2.330.0
+RUNNER_WORK_DIR ?= /srv/actions-runner-docker/_work
 
 .PHONY: help build up down restart logs shell clean status env push
 
@@ -21,6 +22,7 @@ build:
 	docker build --build-arg RUNNER_VERSION=$(RUNNER_VERSION) -t $(IMAGE_NAME) .
 
 up:
+	@mkdir -p "$(RUNNER_WORK_DIR)"
 	docker-compose up -d
 
 down:
@@ -50,7 +52,8 @@ env:
 
 clean:
 	docker-compose down --rmi local -v 2>/dev/null || true
-	rm -rf ./runner/_work 2>/dev/null || true
+	rm -rf "$(RUNNER_WORK_DIR)" 2>/dev/null || true
+	rm -rf ./_work 2>/dev/null || true
 	@echo "Cleaned up successfully."
 
 rebuild: clean build up

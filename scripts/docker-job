@@ -1,0 +1,26 @@
+#!/bin/bash
+# Run a container that shares the runner workspace (DooD-safe).
+# Usage: docker-job [docker run args...] IMAGE [CMD...]
+#
+# Always injects --volumes-from so nested containers see the same
+# workspace paths as the host Docker daemon expects.
+
+set -euo pipefail
+
+RUNNER_REF="${RUNNER_NAME:-${HOSTNAME:-github-runner}}"
+EXTRA=()
+
+# Inherit runner mounts (workspace, etc.)
+EXTRA+=(--volumes-from "$RUNNER_REF")
+
+# If the job needs to run docker itself (3rd layer), pass the host socket
+if [[ -S /var/run/docker.sock ]]; then
+  EXTRA+=(-v /var/run/docker.sock:/var/run/docker.sock)
+fi
+
+# Default workdir to GitHub workspace when available
+if [[ -n "${GITHUB_WORKSPACE:-}" ]]; then
+  EXTRA+=(-w "$GITHUB_WORKSPACE")
+fi
+
+exec docker run --rm "${EXTRA[@]}" "$@"

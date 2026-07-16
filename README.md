@@ -35,38 +35,84 @@ make logs  # Check if connected
 
 ```
 actions-runner-docker/
-├── Dockerfile           # Ubuntu + GitHub runner
-├── docker-compose.yaml  # Container config
-├── entrypoint.sh        # Startup script
+├── Dockerfile           # Ubuntu + GitHub runner + docker-job helper
+├── docker-compose.yaml  # Container config (DooD)
+├── entrypoint.sh        # Startup: register, docker GID, run
+├── scripts/docker-job   # Safe docker run wrapper for workflows
 ├── Makefile             # Helper commands
-└── _work/               # Job workspace (mounted volume)
+└── _work/               # Job workspace (same path on host and container)
 ```
 
-## Docker-out-of-Docker
+## Docker-out-of-Docker (DooD)
 
-This runner exposes the host Docker daemon via `/var/run/docker.sock`, allowing workflows to run containers.
+This runner mounts the **host** Docker socket (`/var/run/docker.sock`). Workflows talk to the host daemon — not a nested dockerd.
 
-### The Empty Volume Problem
+```
+Host Docker daemon
+  └── github-runner (CLI + socket)
+        └── job containers
+              └── optional 3rd-layer containers
+```
 
-When you run `docker run -v "${{ github.workspace }}:/app" ...` inside a job, the command goes to the **host Docker daemon**. The daemon resolves `-v` paths on the **host filesystem**, not inside the runner container.
+### Why the work path must match
 
-If the path doesn't exist on the host, Docker creates an empty directory → your files "disappear".
+`-v` and Compose bind mounts are resolved on the **host**. The workspace path inside the runner must be the **same absolute path** on the host.
 
-### Solution: `--volumes-from`
+Default (already configured):
 
-Use `--volumes-from "$(hostname)"` to inherit the runner's mounted volumes:
+```text
+/srv/actions-runner-docker/_work  →  /srv/actions-runner-docker/_work
+```
+
+Override with `RUNNER_WORK_DIR` in `.env` if you install elsewhere — keep host and container identical.
+
+### Running containers from a job
+
+**Recommended** — use the built-in helper (injects `--volumes-from` + socket):
+
+```yaml
+- name: Run pipeline in container
+  run: |
+    docker-job your-image:tag bash -lc "your-command"
+```
+
+**Manual equivalent:**
 
 ```yaml
 - name: Run pipeline in container
   run: |
     docker run --rm \
-      --volumes-from "$(hostname)" \
+      --volumes-from github-runner \
+      -v /var/run/docker.sock:/var/run/docker.sock \
       -w "${{ github.workspace }}" \
       your-image:tag \
       bash -lc "your-command"
 ```
 
-Now the nested container sees the same workspace as the runner, with all your files intact.
+`--volumes-from github-runner` is required so nested containers see the same workspace files. Without it, Docker may create an **empty** host directory and your files “disappear”.
+
+### Third layer (container that also runs Docker)
+
+`docker-job` already mounts the socket. If you call `docker run` yourself, pass both:
+
+```bash
+docker run --rm \
+  --volumes-from github-runner \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -w "${{ github.workspace }}" \
+  your-image:tag \
+  bash -lc "docker build -t app . && docker run --rm app"
+```
+
+### Compose in the repo
+
+With matching work paths, relative binds like `.:/app` resolve to the same host path and work as expected when you run compose from `${{ github.workspace }}`.
+
+### Avoid
+
+- Job-level `container:` on self-hosted DooD runners (different isolation; often breaks socket/workspace)
+- Bind-mounting paths that exist only inside an intermediate container
+- Assuming paths inside a nested container exist on the host without `--volumes-from` or a matching absolute path
 
 ## Available Commands
 
@@ -80,7 +126,7 @@ make logs-tail  - Show last 100 lines
 make shell      - Open bash in runner
 make status     - Show container status
 make env        - Create .env from template
-make clean      - Remove containers/volumes
+make clean      - Remove containers/volumes/work dir
 make rebuild    - clean + build + up
 make push       - Push to registry (set DOCKER_IMAGE in .env)
 ```
@@ -113,10 +159,13 @@ RUNNER_VERSION=2.330.0 make build
 - View logs: `make logs`
 - Regenerate token
 
-**Permission errors:**
-```bash
-sudo chown -R $USER:$USER ./_work
-```
+**Permission denied on docker.sock:**
+- The entrypoint aligns the `docker` group GID with the host socket
+- Rebuild/restart after pulling these changes: `make rebuild`
+
+**Empty volumes / missing workspace files:**
+- Use `docker-job` or `--volumes-from github-runner`
+- Confirm `RUNNER_WORK_DIR` is the same absolute path on host and container
 
 **Container keeps restarting:**
 - Token likely expired or already used

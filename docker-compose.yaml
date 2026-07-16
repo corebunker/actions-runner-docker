@@ -3,12 +3,15 @@ services:
   github-runner:
     image: ${DOCKER_IMAGE:-actions-runner-docker}
     container_name: github-runner
+    hostname: github-runner
     restart: unless-stopped
     env_file: [".env"]
     environment:
       GITHUB_URL: "${GITHUB_URL}"
       GITHUB_TOKEN: "${GITHUB_TOKEN}"
-      Runner_Work_Dir: "/srv/actions-runner-docker/_work"
+      RUNNER_NAME: github-runner
+      Runner_Work_Dir: "${RUNNER_WORK_DIR:-/srv/actions-runner-docker/_work}"
+      RUNNER_WORK_DIR: "${RUNNER_WORK_DIR:-/srv/actions-runner-docker/_work}"
     volumes:
-      - ./_work:/srv/actions-runner-docker/_work
+      - ${RUNNER_WORK_DIR:-/srv/actions-runner-docker/_work}:${RUNNER_WORK_DIR:-/srv/actions-runner-docker/_work}
       - /var/run/docker.sock:/var/run/docker.sock

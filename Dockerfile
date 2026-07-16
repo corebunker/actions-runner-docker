@@ -1,7 +1,5 @@
 FROM ubuntu:22.04
 
-ARG RUNNER_VERSION=2.330.0
-
 RUN apt-get update && apt-get install -y \
     curl \
     git \
@@ -14,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     lsb-release \
     tree \
+    util-linux \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -32,6 +31,8 @@ RUN useradd -m -d /opt/actions-runner runner \
 
 WORKDIR /opt/actions-runner
 
+ARG RUNNER_VERSION=2.335.1
+
 # Github Runner
 RUN curl -L -o actions-runner.tar.gz \
     "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz" \
@@ -40,7 +41,8 @@ RUN curl -L -o actions-runner.tar.gz \
     && chown -R runner:runner /opt/actions-runner
 
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY scripts/docker-job /usr/local/bin/docker-job
+RUN chmod +x /entrypoint.sh /usr/local/bin/docker-job
 
 RUN mkdir -p /opt/actions-runner/_work \
     && chown -R runner:runner /opt/actions-runner/_work
